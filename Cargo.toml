@@ -1,0 +1,17 @@
+[workspace]
+members = [ "src/macros" ]
+
+[package]
+name = "bitfi"
+version = "0.1.1"
+edition = "2024"
+description = "Bit fields"
+authors = ["Saúl Valdelvira <saul@saulv.es>"]
+license = "MIT"
+readme = "README"
+repository = "https://git.saulv.es/bitfields"
+
+[dependencies.macros]
+package = "bitfi-macros"
+version = ">=0.1.0"
+path = "src/macros"

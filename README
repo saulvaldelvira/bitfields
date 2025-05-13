@@ -1,0 +1,9 @@
+Bitfi(elds)
+===========
+Bitfield library for Rust
+
+== Documentation ==
+To build the documentation, run `cargo doc`
+Or browse it online at
+- https://docs.rs/bitfi
+
