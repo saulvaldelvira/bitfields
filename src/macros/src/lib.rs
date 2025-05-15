@@ -1,9 +1,9 @@
 use core::convert::Into;
 use core::iter::Iterator;
 
-use proc_macro2::{Delimiter, Ident, Literal};
+use proc_macro2::{Delimiter, Group, Ident, TokenStream};
 use proc_macro2::{Span, TokenTree};
-use quote::quote;
+use quote::{quote, TokenStreamExt};
 
 macro_rules! err {
     ($msg:expr) => {
@@ -27,19 +27,6 @@ macro_rules! try_item {
             }
             else { None }
         } else { None }
-    }};
-}
-
-macro_rules! try_punct {
-    ($args:expr, $p:literal) => {{
-        if let Some(TokenTree::Punct(p)) = $args.peek() {
-            if p.as_char() == $p {
-                $args.next();
-                true
-            } else { false }
-        } else {
-            false
-        }
     }};
 }
 
@@ -83,12 +70,12 @@ macro_rules! expect_ident {
     }};
 }
 
-fn make_field_multi_byte(ty: &Ident, name: Ident, start: Literal, end: Literal, mutable: bool) -> proc_macro2::TokenStream {
+fn make_field_multi_byte(ty: &Ident, name: Ident, range: TokenTree, mutable: bool) -> proc_macro2::TokenStream {
     let get_ident = proc_macro2::Ident::new(&format!("get_{name}"), Span::call_site());
     let mut r = quote! {
         #[inline]
         pub fn #get_ident (&self) -> #ty {
-            bitfi::BitField::get_bit_range(self, #start..=#end)
+            bitfi::BitField::get_bit_range(self, #range)
         }
     };
 
@@ -99,7 +86,7 @@ fn make_field_multi_byte(ty: &Ident, name: Ident, start: Literal, end: Literal, 
 
             #[inline]
             pub fn #set_ident (&mut self, val: #ty) {
-                bitfi::BitField::set_bit_range(self, #start..=#end, val)
+                bitfi::BitField::set_bit_range(self, #range, val)
             }
         }
     }
@@ -107,7 +94,7 @@ fn make_field_multi_byte(ty: &Ident, name: Ident, start: Literal, end: Literal, 
     r
 }
 
-fn make_field_single_byte(name: Ident, index: Literal, mutable: bool) -> proc_macro2::TokenStream {
+fn make_field_single_byte(name: Ident, index: TokenTree, mutable: bool) -> proc_macro2::TokenStream {
     let get_ident = proc_macro2::Ident::new(&format!("get_{name}"), Span::call_site());
     let mut r = quote! {
         #[inline]
@@ -154,14 +141,20 @@ fn parse_bitfield(ts: &mut impl Iterator<Item = TokenTree>) -> proc_macro2::Toke
 
         expect_punct!(ts, ':');
 
-        let start = unwrap!(ts, Literal);
+        let mut toks = TokenStream::new();
+        let mut len = 0;
+        while ts.peek().is_some_and(|t| {
+            match t {
+                TokenTree::Literal(_) => true,
+                TokenTree::Punct(p) => matches!(p.as_char(), '.' | '='),
+                _ => false
+            }
+        }) {
+            toks.append(ts.next().unwrap());
+            len += 1;
+        }
 
-        #[allow(clippy::collapsible_match)]
-        let end = if try_punct!(ts, '-') {
-            Some(unwrap!(ts, Literal))
-        } else {
-            None
-        };
+        let range = TokenTree::Group(Group::new(Delimiter::None, toks));
 
         let mut mutable = true;
 
@@ -180,13 +173,14 @@ fn parse_bitfield(ts: &mut impl Iterator<Item = TokenTree>) -> proc_macro2::Toke
         }
 
         expect_punct!(ts, ';');
-        fields.push((name, start, end, mutable));
+        fields.push((name, len, range, mutable));
     }
 
-    let fields = fields.into_iter().map(|(name, start, end, mutable)| {
-        match end {
-            Some(end) => make_field_multi_byte(&ty, name, start, end, mutable),
-            None => make_field_single_byte(name, start, mutable),
+    let fields = fields.into_iter().map(|(name, len, range, mutable)| {
+        if len > 1 {
+            make_field_multi_byte(&ty, name, range, mutable)
+        } else {
+            make_field_single_byte(name, range, mutable)
         }
     });
 
@@ -216,12 +210,12 @@ fn parse_bitfield(ts: &mut impl Iterator<Item = TokenTree>) -> proc_macro2::Toke
             }
 
             #[inline(always)]
-            fn set_bit_range(&mut self, range: ::core::ops::RangeInclusive<#ty>, b: #ty) {
+            fn set_bit_range(&mut self, range: impl ::core::ops::RangeBounds<#ty>, b: #ty) {
                 self.0.set_bit_range(range, b);
             }
 
             #[inline(always)]
-            fn get_bit_range(&self, range: ::core::ops::RangeInclusive<#ty>) -> #ty {
+            fn get_bit_range(&self, range: impl ::core::ops::RangeBounds<#ty>) -> #ty {
                 self.0.get_bit_range(range)
             }
         }

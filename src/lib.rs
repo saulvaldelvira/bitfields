@@ -5,7 +5,7 @@
 //! bitfield! {
 //!     Flags = u16 {
 //!         on: 0;
-//!         field1: 1 - 3;
+//!         field1: 1 ..= 3;
 //!     }
 //! }
 //!
@@ -24,7 +24,7 @@
 
 #![no_std]
 
-use core::ops::{Add, BitAnd, BitAndAssign, BitOrAssign, BitXorAssign, Not, RangeInclusive, Shl, Shr, Sub};
+use core::ops::{Add, BitAnd, BitAndAssign, BitOrAssign, BitXorAssign, Not, RangeBounds, Shl, Shr, Sub};
 
 /// Declares a [bitfield](BitField)
 #[doc(inline)]
@@ -47,11 +47,34 @@ pub trait BitField<T> {
     /// false for 0
     fn get_bit(&self, i: T) -> bool;
 
-    /// Sets bits in the given [range](RangeInclusive) to b
-    fn set_bit_range(&mut self, range: RangeInclusive<T>, b: T);
+    /// Sets bits in the given [range](RangeBounds) to b
+    fn set_bit_range(&mut self, range: impl RangeBounds<T>, b: T);
 
-    /// Gets the bits in the given [range](RangeInclusive)
-    fn get_bit_range(&self, range: RangeInclusive<T>) -> T;
+    /// Gets the bits in the given [range](RangeBounds)
+    fn get_bit_range(&self, range: impl RangeBounds<T>) -> T;
+}
+
+fn range_convrt<T>(range: impl RangeBounds<T>) -> (T, T)
+where
+    T: Sub<Output = T> + From<u8> + Copy,
+{
+    use core::ops::Bound;
+
+    let start = match range.start_bound() {
+        Bound::Included(n) => *n,
+        Bound::Excluded(n) => *n - T::from(1),
+        Bound::Unbounded => T::from(0),
+    };
+
+    let end = match range.end_bound() {
+        Bound::Included(n) => *n,
+        Bound::Excluded(n) => *n - T::from(1),
+        Bound::Unbounded => {
+            T::from ( (core::mem::size_of::<T>() * 8) as u8)
+        },
+    };
+
+    (start, end)
 }
 
 impl<T> BitField<T> for T
@@ -79,8 +102,8 @@ where
         (*self) ^= T::from(1) << i;
     }
 
-    fn set_bit_range(&mut self, range: RangeInclusive<T>, b: T) {
-        let (start, end) = range.into_inner();
+    fn set_bit_range(&mut self, range: impl RangeBounds<T>, b: T) {
+        let (start, end) = range_convrt(range);
         let mut mask = (!T::from(0)) << (end - start + T::from(1));
         mask = !mask;
 
@@ -88,8 +111,8 @@ where
         (*self) |= (b & mask) << start;
     }
 
-    fn get_bit_range(&self, range: RangeInclusive<T>) -> T {
-        let (start, end) = range.into_inner();
+    fn get_bit_range(&self, range: impl RangeBounds<T>) -> T {
+        let (start, end) = range_convrt(range);
         let mut mask = (!T::from(0)) << (end - start + T::from(1));
         mask = !mask << start;
 

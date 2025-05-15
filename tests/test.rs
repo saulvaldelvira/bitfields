@@ -6,13 +6,13 @@ extern crate std;
 bitfield! {
     TestBf = u16 {
         on: 2;
-        love : 0 - 1;
+        love : 0 ..= 1;
     }
 
     TestB2 = u32 {
-        love : 0 - 1;
-        love2 : 2 - 4;
-        war: 5 - 8 [mut = false];
+        love : 0 ..= 1;
+        love2 : 2 ..= 4;
+        war: 5 ..= 8 [mut = false];
     }
 }
 
