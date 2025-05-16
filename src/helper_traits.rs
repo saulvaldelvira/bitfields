@@ -1,16 +1,43 @@
+//! Helper traits: [One] [Zero] and [BitSize]
+
+/// Helper identity trait
 pub trait One {
+    /// Gets one for Self
+    ///
+    /// # Example
+    /// ```
+    /// use bitfi::helper_traits::One;
+    /// assert_eq!(<u16 as One>::one(), 1_u16);
+    /// ```
     fn one() -> Self;
 }
 
+/// Helper trait for types that can be "zero"
 pub trait Zero {
+    /// Gets zero for Self
+    ///
+    /// # Example
+    /// ```
+    /// use bitfi::helper_traits::Zero;
+    /// assert_eq!(<u16 as Zero>::zero(), 0_u16);
+    /// ```
     fn zero() -> Self;
 }
 
+/// Helper trait to get the number of bits in a type
 pub trait BitSize {
+    /// Gets the number of bytes in this type.
+    ///
+    /// This means `core::mem::size_of::<Self>() * 8`  as Self
+    ///
+    /// # Example
+    /// ```
+    /// use bitfi::helper_traits::BitSize;
+    /// assert_eq!(<u16 as BitSize>::bit_size(), 16);
+    /// ```
     fn bit_size() -> Self;
 }
 
-#[macro_export]
 macro_rules! impl_ident {
     ($($ty:ty),*) => {
         $(
@@ -27,12 +54,23 @@ macro_rules! impl_ident {
     };
 }
 
-
+/// Implements [BitSize] for a type, given it's number of bytes
+///
+/// # Example
+/// ```
+/// use bitfi::impl_bitsize;
+///
+/// struct S(u8);
+///
+/// impl_bitsize! {
+///     S: S(8)
+/// }
+/// ```
 #[macro_export]
 macro_rules! impl_bitsize {
-    ($($ty:ty: $bs:literal),*) => {
+    ($($ty:ty: $bs:expr),*) => {
         $(
-            impl BitSize for $ty {
+            impl $crate::helper_traits::BitSize for $ty {
                 #[inline(always)]
                 fn bit_size() -> Self { $bs }
             }
